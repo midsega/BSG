@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Web Audio Sound Effect Generator</title>
+  <style>
+    :root { --bg:#0f172a; --panel:#111827; --text:#e5e7eb; --muted:#9ca3af; --accent:#22d3ee; --line:#1f2937; }
+    * { box-sizing: border-box; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; }
+    body { margin:0; background: var(--bg); color: var(--text); }
+    header { padding: 16px 20px; border-bottom: 1px solid var(--line); display:flex; align-items:center; justify-content:space-between; }
+    h1 { margin:0; font-size: 20px; letter-spacing:.3px; }
+    main { display:grid; grid-template-columns: 350px 1fr; gap: 16px; padding: 16px; }
+    @media (max-width: 900px){ main{ grid-template-columns: 1fr; } }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+    .row { display:grid; grid-template-columns: 150px 1fr 70px; gap: 10px; align-items:center; margin: 10px 0; }
+    .row label { color: var(--muted); font-size: 12px; }
+    .row input[type=range] { width:100%; }
+    .row input[type=number] { width:100%; background:#0b1023; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:6px 8px; }
+    select, button { background:#0b1023; color: var(--text); border:1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+    button.primary { background: var(--accent); color:#08252a; border-color: transparent; font-weight:600; }
+    button.block { width:100%; }
+    fieldset { border: 1px dashed var(--line); border-radius: 12px; padding: 10px; margin: 10px 0; }
+    legend { color: var(--muted); font-size:12px; padding: 0 6px; }
+    .controls { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .stack { display:flex; gap:10px; flex-wrap:wrap; }
+    .kbd { background:#0b1023; border:1px solid var(--line); padding:2px 6px; border-radius:6px; font-size:12px; color:var(--muted); }
+    .meters { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    .meter { height:8px; background:#0b1023; border:1px solid var(--line); border-radius:5px; overflow:hidden; }
+    .meter > i { display:block; height:100%; width:0%; background: linear-gradient(90deg, #22d3ee, #60a5fa); }
+    small { color: var(--muted); }
+    .log { min-height: 120px; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; background:#0b1023; border:1px solid var(--line); border-radius:10px; padding:10px; }
+    .tools { display:flex; flex-direction:column; gap:12px; margin-top:8px; }
+    .tool { background:#0b1023; border:1px solid var(--line); border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:8px; }
+    .tool h4 { margin:0; font-size:14px; letter-spacing:.2px; }
+    .tool p { margin:0; color: var(--muted); font-size:12px; line-height:1.4; }
+    .tools-empty { color: var(--muted); font-size:12px; text-align:center; border:1px dashed var(--line); border-radius:12px; padding:18px; }
+    a.link { color:#7dd3fc; text-decoration: none; border-bottom: 1px dotted #7dd3fc; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Web Audio Sound Effect Generator</h1>
+  <div>
+    <span class="kbd">Space</span> One‑shot
+    <span class="kbd">S</span> Sustain/Stop
+  </div>
+</header>
+<main>
+  <!-- Left: Controls -->
+  <section class="panel">
+    <div class="controls">
+      <fieldset>
+        <legend>Oscillator</legend>
+        <div class="row">
+          <label for="wave">Wave</label>
+          <select id="wave">
+            <option>sine</option>
+            <option>square</option>
+            <option>sawtooth</option>
+            <option>triangle</option>
+          </select>
+          <small>type</small>
+        </div>
+        <div class="row">
+          <label for="freq">Frequency</label>
+          <input id="freq" type="range" min="40" max="2000" step="1" value="440" />
+          <input id="freqNum" type="number" min="40" max="2000" step="1" value="440" />
+        </div>
+        <div class="row">
+          <label for="detune">Detune</label>
+          <input id="detune" type="range" min="-1200" max="1200" step="1" value="0" />
+          <input id="detuneNum" type="number" min="-1200" max="1200" step="1" value="0" />
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Noise</legend>
+        <div class="row">
+          <label for="noiseMix">Noise mix</label>
+          <input id="noiseMix" type="range" min="0" max="1" step="0.01" value="0.00" />
+          <input id="noiseMixNum" type="number" min="0" max="1" step="0.01" value="0.00" />
+        </div>
+        <div class="row">
+          <label for="noiseType">Type</label>
+          <select id="noiseType">
+            <option value="white">white</option>
+            <option value="pink">pink</option>
+            <option value="brown">brown</option>
+          </select>
+          <small>color</small>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Envelope (ADSR)</legend>
+        <div class="row"><label for="attack">Attack</label><input id="attack" type="range" min="0" max="2" step="0.01" value="0.01" /><input id="attackNum" type="number" min="0" max="2" step="0.01" value="0.01" /></div>
+        <div class="row"><label for="decay">Decay</label><input id="decay" type="range" min="0" max="3" step="0.01" value="0.2" /><input id="decayNum" type="number" min="0" max="3" step="0.01" value="0.2" /></div>
+        <div class="row"><label for="sustain">Sustain</label><input id="sustain" type="range" min="0" max="1" step="0.01" value="0.7" /><input id="sustainNum" type="number" min="0" max="1" step="0.01" value="0.7" /></div>
+        <div class="row"><label for="release">Release</label><input id="release" type="range" min="0" max="5" step="0.01" value="0.4" /><input id="releaseNum" type="number" min="0" max="5" step="0.01" value="0.4" /></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Filter</legend>
+        <div class="row"><label for="filterType">Type</label><select id="filterType"><option>lowpass</option><option>highpass</option><option>bandpass</option><option>notch</option></select><small>biquad</small></div>
+        <div class="row"><label for="cutoff">Cutoff</label><input id="cutoff" type="range" min="60" max="12000" step="1" value="6000" /><input id="cutoffNum" type="number" min="60" max="20000" step="1" value="6000" /></div>
+        <div class="row"><label for="q">Resonance Q</label><input id="q" type="range" min="0.0001" max="20" step="0.0001" value="0.7" /><input id="qNum" type="number" min="0.0001" max="20" step="0.0001" value="0.7" /></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Delay</legend>
+        <div class="row"><label for="delayTime">Time</label><input id="delayTime" type="range" min="0" max="1.0" step="0.001" value="0.20" /><input id="delayTimeNum" type="number" min="0" max="1.0" step="0.001" value="0.20" /></div>
+        <div class="row"><label for="feedback">Feedback</label><input id="feedback" type="range" min="0" max="0.95" step="0.01" value="0.25" /><input id="feedbackNum" type="number" min="0" max="0.95" step="0.01" value="0.25" /></div>
+        <div class="row"><label for="mix">Mix</label><input id="mix" type="range" min="0" max="1" step="0.01" value="0.15" /><input id="mixNum" type="number" min="0" max="1" step="0.01" value="0.15" /></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>LFO</legend>
+        <div class="row"><label for="lfoRate">Rate Hz</label><input id="lfoRate" type="range" min="0" max="20" step="0.01" value="5.0" /><input id="lfoRateNum" type="number" min="0" max="20" step="0.01" value="5.0" /></div>
+        <div class="row"><label for="lfoDepth">Depth</label><input id="lfoDepth" type="range" min="0" max="1" step="0.01" value="0.00" /><input id="lfoDepthNum" type="number" min="0" max="1" step="0.01" value="0.00" /></div>
+        <div class="row"><label for="lfoTarget">Target</label><select id="lfoTarget"><option value="freq">frequency</option><option value="cutoff">cutoff</option><option value="gain">amplitude</option></select><small>mod</small></div>
+      </fieldset>
+    </div>
+
+    <div class="stack" style="margin-top:12px">
+      <button id="btnOne" class="primary">One‑shot</button>
+      <button id="btnSustain">Sustain</button>
+      <button id="btnStop">Stop</button>
+      <button id="btnRandom">Randomize</button>
+      <button id="btnReset">Reset</button>
+    </div>
+
+    <div class="stack" style="margin-top:12px">
+      <button id="btnRec">Start Recording</button>
+      <a id="downloadLink" class="link" href="#" download hidden>Download recording</a>
+      <input id="presetFile" type="file" accept="application/json" hidden />
+      <button id="btnSave">Save Preset</button>
+      <button id="btnLoad">Load Preset</button>
+    </div>
+
+    <p><small>Tips: Hit Space for one‑shots. Hit S to toggle sustain. Reduce cutoff for laser or explosion style effects. Increase noise mix for wind or impacts.</small></p>
+  </section>
+
+  <!-- Right: Output + meters + log -->
+  <section class="panel">
+    <h3 style="margin:0 0 8px 0">Output</h3>
+    <div class="meters">
+      <div>
+        <label>Master level</label>
+        <div class="meter"><i id="meterLevel"></i></div>
+      </div>
+      <div>
+        <label>Delay return</label>
+        <div class="meter"><i id="meterDelay"></i></div>
+      </div>
+    </div>
+
+    <div style="margin-top:14px">
+      <div class="row">
+        <label for="master">Master gain</label>
+        <input id="master" type="range" min="0" max="1" step="0.001" value="0.5" />
+        <input id="masterNum" type="number" min="0" max="1" step="0.001" value="0.5" />
+      </div>
+    </div>
+
+    <h3 style="margin:16px 0 6px 0">Tools</h3>
+    <div id="toolsPanel" class="tools">
+      <div class="tools-empty" id="toolsEmpty">No tools registered yet. Call <code>registerSoundTool</code> to add one.</div>
+    </div>
+
+    <h3 style="margin:16px 0 6px 0">Log</h3>
+    <div class="log" id="log"></div>
+  </section>
+</main>
+
+<script>
+(function(){
+  // Audio graph basics
+  let ctx; let masterGain; let analyser; let mediaDest; let recorder; let chunks=[];
+  let delay, delayGain, feedbackGain;
+  let currentVoices = new Set();
+
+  const log = (s)=>{ const el = document.getElementById('log'); el.textContent = (s + "\n" + el.textContent).slice(0, 4000); };
+
+  const toolRegistry = new Map();
+  const toolHost = document.getElementById('toolsPanel');
+  const toolEmpty = document.getElementById('toolsEmpty');
+
+  function refreshToolsEmpty(){
+    if (!toolEmpty) return;
+    toolEmpty.style.display = toolRegistry.size ? 'none' : '';
+  }
+
+  function buildToolContext(){
+    ensureCtx();
+    return {
+      audioContext: ctx,
+      masterGain,
+      delay,
+      delayReturn: delayGain,
+      feedbackGain,
+      analyser,
+      currentVoices,
+      mkVoice: (config)=> mkVoice(config),
+      spawnVoice: (overrides = {})=> mkVoice({ ...params(), ...overrides })
+    };
+  }
+
+  function registerSoundTool({ id, label, description, buttonText, action }){
+    if (!toolHost) return null;
+    if (!id) throw new Error('Tool id is required');
+    if (toolRegistry.has(id)){
+      const existing = toolRegistry.get(id);
+      if (existing?.el?.parentNode === toolHost){
+        toolHost.removeChild(existing.el);
+      }
+      toolRegistry.delete(id);
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'tool';
+
+    const title = document.createElement('h4');
+    title.textContent = label || id;
+    wrapper.appendChild(title);
+
+    if (description){
+      const desc = document.createElement('p');
+      desc.textContent = description;
+      wrapper.appendChild(desc);
+    }
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.classList.add('block');
+    btn.textContent = buttonText || 'Run';
+    btn.addEventListener('click', async ()=>{
+      try {
+        ensureCtx();
+        await action?.({ context: buildToolContext(), params, log, stopAll, oneShot, sustain, randomize, reset });
+      } catch (err){
+        console.error('Tool error', err);
+        log('Tool error: ' + (err?.message || err));
+      }
+    });
+    wrapper.appendChild(btn);
+
+    toolHost.appendChild(wrapper);
+    toolRegistry.set(id, { el: wrapper, button: btn, action });
+    refreshToolsEmpty();
+    return wrapper;
+  }
+
+  function unregisterSoundTool(id){
+    if (!toolHost || !toolRegistry.has(id)) return false;
+    const entry = toolRegistry.get(id);
+    if (entry?.el?.parentNode === toolHost){
+      toolHost.removeChild(entry.el);
+    }
+    toolRegistry.delete(id);
+    refreshToolsEmpty();
+    return true;
+  }
+
+  refreshToolsEmpty();
+
+  window.registerSoundTool = registerSoundTool;
+  window.unregisterSoundTool = unregisterSoundTool;
+
+  function ensureCtx(){
+    if (ctx) return;
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = ctx.createGain();
+    masterGain.gain.value = num('master');
+
+    // Delay network
+    delay = ctx.createDelay(1.0);
+    delay.delayTime.value = num('delayTime');
+    delayGain = ctx.createGain();
+    delayGain.gain.value = num('mix');
+    feedbackGain = ctx.createGain();
+    feedbackGain.gain.value = num('feedback');
+
+    delay.connect(feedbackGain).connect(delay); // feedback loop
+    delay.connect(delayGain);
+
+    // Master and meters
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 1024;
+
+    // Recording path
+    mediaDest = ctx.createMediaStreamDestination();
+
+    const masterBus = ctx.createGain(); masterBus.gain.value = 1;
+    masterBus.connect(analyser);
+    masterBus.connect(ctx.destination);
+    masterBus.connect(mediaDest);
+
+    delayGain.connect(masterBus);
+    masterGain.connect(masterBus); // dry bus is masterGain
+
+    // UI meters loop
+    meterLoop();
+  }
+
+  function num(id){ return parseFloat(document.getElementById(id + 'Num').value); }
+  function setPair(id, v){ document.getElementById(id).value = v; document.getElementById(id+'Num').value = v; }
+  function bindPairs(ids){
+    ids.forEach(id=>{
+      const r = document.getElementById(id);
+      const n = document.getElementById(id+'Num');
+      r.addEventListener('input', ()=>{ n.value = r.value; onParam(id); });
+      n.addEventListener('input', ()=>{ r.value = n.value; onParam(id); });
+    });
+  }
+
+  function onParam(id){
+    if (!ctx) return;
+    if (id === 'master') masterGain.gain.value = num('master');
+    if (id === 'delayTime') delay.delayTime.value = num('delayTime');
+    if (id === 'feedback') feedbackGain.gain.value = num('feedback');
+    if (id === 'mix'){ const mixValue = num('mix'); delayGain.gain.value = mixValue; }
+    if (id === 'cutoff' || id === 'q'){ currentVoices.forEach(v=>{ if(v.filter){ v.filter.frequency.value = num('cutoff'); v.filter.Q.value = num('q'); } }); }
+  }
+
+  function createNoiseBuffer(type){
+    const len = ctx.sampleRate * 2; // 2s buffer
+    const buffer = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    if (type === 'white'){
+      for (let i=0;i<len;i++){ data[i] = Math.random()*2-1; }
+    } else if (type === 'pink'){
+      // Voss-McCartney approximation
+      let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+      for (let i=0;i<len;i++){
+        const white = Math.random()*2-1;
+        b0 = 0.99886*b0 + white*0.0555179;
+        b1 = 0.99332*b1 + white*0.0750759;
+        b2 = 0.96900*b2 + white*0.1538520;
+        b3 = 0.86650*b3 + white*0.3104856;
+        b4 = 0.55000*b4 + white*0.5329522;
+        b5 = -0.7616*b5 - white*0.0168980;
+        data[i] = b0+b1+b2+b3+b4+b5+b6 + white*0.5362;
+        data[i] *= 0.11; b6 = white*0.115926;
+      }
+    } else { // brown
+      let last=0;
+      for (let i=0;i<len;i++){
+        const white = Math.random()*2-1;
+        last = (last + 0.02*white) / 1.02;
+        data[i] = last * 3.5; // normalize roughly
+      }
+    }
+    return buffer;
+  }
+
+  function mkVoice({wave, freq, detune, attack, decay, sustain, release, filterType, cutoff, q, lfoRate, lfoDepth, lfoTarget, noiseMix, noiseType}){
+    ensureCtx();
+
+    const now = ctx.currentTime;
+
+    const out = ctx.createGain();
+    out.gain.value = 1.0;
+
+    // Amp envelope
+    const amp = ctx.createGain();
+    amp.gain.setValueAtTime(0, now);
+    amp.gain.linearRampToValueAtTime(1, now + attack);
+    amp.gain.linearRampToValueAtTime(sustain, now + attack + decay);
+
+    // Filter
+    const filter = ctx.createBiquadFilter();
+    filter.type = filterType;
+    filter.frequency.value = cutoff;
+    filter.Q.value = q;
+
+    // Delay send
+    const send = ctx.createGain();
+    send.gain.value = 1;
+
+    // Osc
+    const osc = ctx.createOscillator();
+    osc.type = wave; osc.frequency.value = freq; osc.detune.value = detune;
+
+    // Noise
+    const noiseGain = ctx.createGain(); noiseGain.gain.value = noiseMix;
+    const noise = ctx.createBufferSource();
+    noise.buffer = createNoiseBuffer(noiseType);
+    noise.loop = true;
+
+    // LFO
+    const lfo = ctx.createOscillator(); lfo.frequency.value = lfoRate;
+    const lfoGain = ctx.createGain(); lfoGain.gain.value = lfoDepth;
+
+    // Routing: osc+noise -> filter -> amp -> out
+    osc.connect(filter); noise.connect(noiseGain).connect(filter);
+    filter.connect(amp);
+    amp.connect(out);
+
+    // Dry and wet
+    out.connect(masterGain);
+    out.connect(send);
+    send.connect(delay);
+
+    // LFO targets
+    if (lfoTarget === 'freq') lfo.connect(lfoGain).connect(osc.frequency);
+    else if (lfoTarget === 'cutoff') lfo.connect(lfoGain).connect(filter.frequency);
+    else if (lfoTarget === 'gain') lfo.connect(lfoGain).connect(amp.gain);
+
+    // Start
+    osc.start(); noise.start(); lfo.start();
+
+    const voice = { osc, noise, lfo, amp, filter, out, send, stop: (when)=>{
+      const t = Math.max(ctx.currentTime, when||ctx.currentTime);
+      amp.gain.cancelScheduledValues(t);
+      amp.gain.setTargetAtTime(0, t, Math.max(0.001, release/5));
+      try { osc.stop(t + release + 0.05); noise.stop(t + release + 0.05); lfo.stop(t + release + 0.05); } catch(e){}
+    }};
+
+    currentVoices.add(voice);
+    const cleanupDelay = setTimeout(()=>{ currentVoices.delete(voice); }, (attack+decay+release+2)*1000);
+    voice._cleanup = ()=>{ clearTimeout(cleanupDelay); currentVoices.delete(voice); };
+
+    return voice;
+  }
+
+  function params(){
+    return {
+      wave: document.getElementById('wave').value,
+      freq: num('freq'),
+      detune: num('detune'),
+      attack: num('attack'),
+      decay: num('decay'),
+      sustain: num('sustain'),
+      release: num('release'),
+      filterType: document.getElementById('filterType').value,
+      cutoff: num('cutoff'),
+      q: num('q'),
+      delayTime: num('delayTime'),
+      feedback: num('feedback'),
+      mix: num('mix'),
+      lfoRate: num('lfoRate'),
+      lfoDepth: num('lfoDepth'),
+      lfoTarget: document.getElementById('lfoTarget').value,
+      noiseMix: num('noiseMix'),
+      noiseType: document.getElementById('noiseType').value,
+      master: num('master')
+    };
+  }
+
+  function setParams(p){
+    setPair('freq', p.freq); setPair('detune', p.detune);
+    setPair('attack', p.attack); setPair('decay', p.decay); setPair('sustain', p.sustain); setPair('release', p.release);
+    document.getElementById('wave').value = p.wave;
+    document.getElementById('filterType').value = p.filterType;
+    setPair('cutoff', p.cutoff); setPair('q', p.q);
+    setPair('delayTime', p.delayTime); setPair('feedback', p.feedback); setPair('mix', p.mix);
+    setPair('lfoRate', p.lfoRate); setPair('lfoDepth', p.lfoDepth); document.getElementById('lfoTarget').value = p.lfoTarget;
+    setPair('noiseMix', p.noiseMix); document.getElementById('noiseType').value = p.noiseType;
+    setPair('master', p.master);
+  }
+
+  function oneShot(){ ensureCtx(); const v = mkVoice(params()); const total = Math.max(0.01, num('attack')+num('decay')+num('release')+0.1); setTimeout(()=>v.stop(), total*1000); log('One‑shot: ' + JSON.stringify(params())); }
+
+  let sustaining = null;
+  function sustain(){ ensureCtx(); if (sustaining){ return; } sustaining = mkVoice(params()); log('Sustain start'); }
+  function stopAll(){
+    if (!ctx) return;
+    currentVoices.forEach(v=>{ v.stop(); if (v._cleanup) v._cleanup(); });
+    sustaining = null; log('Stop');
+  }
+
+  function randomize(){
+    function r(min,max){ return Math.random()*(max-min)+min; }
+    function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
+    const p = params();
+    p.wave = pick(['sine','square','sawtooth','triangle']);
+    p.freq = Math.round(r(80, 1200));
+    p.detune = Math.round(r(-50, 50));
+    p.attack = +(r(0, 0.3).toFixed(2));
+    p.decay = +(r(0.05, 1.5).toFixed(2));
+    p.sustain = +(r(0, 1).toFixed(2));
+    p.release = +(r(0.05, 1.2).toFixed(2));
+    p.filterType = pick(['lowpass','highpass','bandpass','notch']);
+    p.cutoff = Math.round(r(200, 10000));
+    p.q = +(r(0.2, 10).toFixed(2));
+    p.delayTime = +(r(0, 0.6).toFixed(3));
+    p.feedback = +(r(0, 0.7).toFixed(2));
+    p.mix = +(r(0, 0.6).toFixed(2));
+    p.lfoRate = +(r(0, 12).toFixed(2));
+    p.lfoDepth = +(r(0, 0.8).toFixed(2));
+    p.lfoTarget = pick(['freq','cutoff','gain']);
+    p.noiseMix = +(r(0, 0.8).toFixed(2));
+    p.noiseType = pick(['white','pink','brown']);
+    setParams(p);
+    log('Randomized');
+  }
+
+  function reset(){ setParams(defaultPreset()); log('Reset'); }
+
+  function defaultPreset(){
+    return { wave:'square', freq:440, detune:0, attack:0.01, decay:0.2, sustain:0.7, release:0.4, filterType:'lowpass', cutoff:6000, q:0.7, delayTime:0.2, feedback:0.25, mix:0.15, lfoRate:5, lfoDepth:0, lfoTarget:'freq', noiseMix:0.0, noiseType:'white', master:0.5 };
+  }
+
+  function savePreset(){ const blob = new Blob([JSON.stringify(params(), null, 2)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'preset.json'; a.click(); URL.revokeObjectURL(a.href); }
+  function loadPreset(file){ const fr = new FileReader(); fr.onload = ()=>{ try { const p = JSON.parse(fr.result); setParams(p); log('Preset loaded'); } catch(e){ alert('Invalid preset'); } }; fr.readAsText(file); }
+
+  function meterLoop(){
+    if (!analyser) return;
+    const arr = new Uint8Array(analyser.fftSize);
+    const masterEl = document.getElementById('meterLevel');
+    const delayEl = document.getElementById('meterDelay');
+    const tick = ()=>{
+      analyser.getByteTimeDomainData(arr);
+      let peak = 0; for (let i=0;i<arr.length;i++){ const v = (arr[i]-128)/128; const a = Math.abs(v); if (a>peak) peak=a; }
+      masterEl.style.width = Math.min(100, Math.floor(peak*140))+'%';
+      // Fake delay meter using current delay mix
+      delayEl.style.width = Math.floor(num('mix')*100)+'%';
+      requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  function startStopRecording(){
+    ensureCtx();
+    if (!recorder){ recorder = new MediaRecorder(mediaDest.stream); }
+    if (recorder.state === 'recording'){
+      recorder.stop();
+      document.getElementById('btnRec').textContent = 'Start Recording';
+      log('Recording stopped');
+    } else {
+      chunks = [];
+      recorder.ondataavailable = e=>{ if (e.data.size>0) chunks.push(e.data); };
+      recorder.onstop = ()=>{
+        const blob = new Blob(chunks, {type: chunks[0]?.type || 'audio/webm'});
+        const url = URL.createObjectURL(blob);
+        const a = document.getElementById('downloadLink');
+        a.href = url; a.hidden = false; a.textContent = 'Download recording';
+      };
+      recorder.start();
+      document.getElementById('btnRec').textContent = 'Stop Recording';
+      log('Recording…');
+    }
+  }
+
+  // Init UI bindings
+  bindPairs(['freq','detune','attack','decay','sustain','release','cutoff','q','delayTime','feedback','mix','lfoRate','lfoDepth','noiseMix','master']);
+  document.getElementById('btnOne').onclick = oneShot;
+  document.getElementById('btnSustain').onclick = sustain;
+  document.getElementById('btnStop').onclick = stopAll;
+  document.getElementById('btnRandom').onclick = randomize;
+  document.getElementById('btnReset').onclick = reset;
+  document.getElementById('btnSave').onclick = savePreset;
+  document.getElementById('btnLoad').onclick = ()=> document.getElementById('presetFile').click();
+  document.getElementById('presetFile').addEventListener('change', e=>{ const f=e.target.files[0]; if (f) loadPreset(f); });
+  document.getElementById('btnRec').onclick = startStopRecording;
+
+  // Built-in tools
+  registerSoundTool({
+    id: 'copy-preset',
+    label: 'Copy preset JSON',
+    description: 'Copy the current generator settings to the clipboard for sharing or manual editing.',
+    buttonText: 'Copy preset',
+    action: async ({ params, log }) => {
+      const data = JSON.stringify(params(), null, 2);
+      try {
+        await navigator.clipboard.writeText(data);
+        log('Preset copied to clipboard');
+      } catch (err) {
+        console.warn('Clipboard copy failed', err);
+        log('Clipboard copy unavailable; see console for details.');
+      }
+    }
+  });
+
+  registerSoundTool({
+    id: 'panic-stop',
+    label: 'Panic stop',
+    description: 'Silence every active voice and nudge the AudioContext if it becomes unstable.',
+    buttonText: 'Panic stop',
+    action: async ({ context, stopAll, log }) => {
+      stopAll();
+      const audio = context.audioContext;
+      if (audio && audio.state === 'running') {
+        try {
+          await audio.suspend();
+          await audio.resume();
+        } catch (err) {
+          console.warn('AudioContext restart failed', err);
+        }
+      }
+      log('Panic stop executed');
+    }
+  });
+
+  registerSoundTool({
+    id: 'impact-sweep',
+    label: 'Impact sweep',
+    description: 'Spawn a short downward pitch sweep based on the current preset for quick UI feedback.',
+    buttonText: 'Trigger sweep',
+    action: ({ context, params, log }) => {
+      const base = params();
+      const sweep = context.spawnVoice({
+        attack: 0.01,
+        decay: Math.max(0.1, base.decay * 0.45),
+        sustain: 0,
+        release: Math.max(0.2, base.release * 0.6),
+        freq: Math.max(60, base.freq * 1.6),
+        detune: base.detune - 300,
+        lfoDepth: 0,
+        lfoRate: base.lfoRate,
+        noiseMix: Math.min(1, base.noiseMix + 0.15)
+      });
+      try {
+        const target = Math.max(40, base.freq * 0.35);
+        sweep.osc.frequency.exponentialRampToValueAtTime(target, context.audioContext.currentTime + 0.28);
+      } catch (err) {
+        console.warn('Sweep ramp failed', err);
+      }
+      log('Impact sweep triggered');
+      setTimeout(() => sweep.stop(), 800);
+    }
+  });
+
+  // Sync linked range/number pairs at load
+  setParams(defaultPreset());
+
+  // Keyboard shortcuts
+  window.addEventListener('keydown', (e)=>{
+    if (e.code === 'Space'){ e.preventDefault(); oneShot(); }
+    if (e.key.toLowerCase() === 's'){ e.preventDefault(); if (sustaining) { stopAll(); } else { sustain(); } }
+  });
+
+  // Touch to prime AudioContext on first use
+  document.body.addEventListener('pointerdown', ensureCtx, {once:true});
+})();
+</script>
+</body>
+</html>
